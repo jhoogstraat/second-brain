@@ -1,7 +1,7 @@
 [project]
 name = "second-brain"
 version = "0.1.0"
-description = "Karpathy-style LLM-wiki second brain served over MCP from a Raspberry Pi"
+description = "Karpathy-style LLM-wiki second brain served over MCP"
 authors = [
     { name = "Joshua Hoogstraat", email = "joshua.hoogstraat@icloud.com" }
 ]
