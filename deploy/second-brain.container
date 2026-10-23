@@ -2,7 +2,8 @@
 Description=Second brain MCP server
 
 [Container]
-Image=localhost/second-brain:latest
+Image=ghcr.io/jhoogstraat/second-brain:latest
+AutoUpdate=registry
 Pod=second-brain.pod
 ContainerName=second-brain
 EnvironmentFile=%h/.config/second-brain/env

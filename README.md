@@ -64,20 +64,27 @@ Cloudflare, and a GitHub account.
 3. **Create the GitHub OAuth App** at github.com → Settings → Developer settings → OAuth Apps:
    - Homepage: `https://brain.example.com`
    - Callback: `https://brain.example.com/auth/callback`
-4. **Configure and start.** The first run creates two files in `~/.config/second-brain/`:
+4. **Log in to the registry.** GitHub Actions builds the image
+   (`ghcr.io/jhoogstraat/second-brain`, arm64 + amd64) on every push to `main`. The repo
+   is private, so the image is too. Create a classic token with `read:packages`, then:
+   ```sh
+   podman login ghcr.io -u jhoogstraat
+   ```
+5. **Configure and start.** The first run creates two files in `~/.config/second-brain/`:
    `env` for the app's secrets ([template](deploy/env.example)) and `tunnel.env` for the
    tunnel token alone, so the cloudflared image never sees the app's secrets. Fill both
    in, then run the script again:
    ```sh
    ./deploy/install.sh   # creates env + tunnel.env
    nano ~/.config/second-brain/env ~/.config/second-brain/tunnel.env
-   ./deploy/install.sh   # builds the image, installs the Quadlet units, starts the pod
+   ./deploy/install.sh   # pulls the image, installs the Quadlet units, starts the pod
    ```
    Verify with `curl https://brain.example.com/health`, which should print `ok`.
 
 Everything runs as rootless systemd user services, so it starts on boot and restarts on
-failure. Check logs with `journalctl --user -u second-brain -f`. To update, `git pull`
-and run `./deploy/install.sh` again.
+failure. Check logs with `journalctl --user -u second-brain -f`. `podman-auto-update`
+pulls new images and restarts every day. To apply an update now, run `podman auto-update`.
+After changing anything in `deploy/`, `git pull` and run `./deploy/install.sh` again.
 
 ## Connect clients
 
