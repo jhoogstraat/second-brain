@@ -65,7 +65,7 @@ Cloudflare, and a GitHub account.
    - Homepage: `https://brain.example.com`
    - Callback: `https://brain.example.com/auth/callback`
 4. **Log in to the registry.** GitHub Actions builds the image
-   (`ghcr.io/jhoogstraat/second-brain`, arm64 + amd64) on every push to `main`. The repo
+   (`ghcr.io/jhoogstraat/second-brain`, arm64, tagged `latest` and `sha-<commit>`) on every push to `main`. The repo
    is private, so the image is too. Create a classic token with `read:packages`, then:
    ```sh
    podman login ghcr.io -u jhoogstraat
