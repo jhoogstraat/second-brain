@@ -14,7 +14,6 @@ for f in env tunnel.env; do
 done
 [ "$missing" = 0 ] || { echo "Then run this script again."; exit 1; }
 
-# Private repo => private image: run `podman login ghcr.io` once first (PAT with read:packages).
 podman pull ghcr.io/jhoogstraat/second-brain:latest
 
 mkdir -p "$HOME/.config/containers/systemd"
