@@ -1,0 +1,16 @@
+[Unit]
+Description=Second brain MCP server
+
+[Container]
+Image=localhost/second-brain:latest
+Pod=second-brain.pod
+ContainerName=second-brain
+EnvironmentFile=%h/.config/second-brain/env
+Volume=second-brain-data:/data
+HealthCmd=python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

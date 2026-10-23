@@ -1,0 +1,17 @@
+[Unit]
+Description=Cloudflare tunnel for the second brain
+
+[Container]
+Image=docker.io/cloudflare/cloudflared:latest
+Pod=second-brain.pod
+ContainerName=cloudflared
+# Only TUNNEL_TOKEN: this third-party image never sees the app secrets.
+EnvironmentFile=%h/.config/second-brain/tunnel.env
+Exec=tunnel --no-autoupdate run
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
