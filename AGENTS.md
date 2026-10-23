@@ -6,8 +6,8 @@ new brain, and its `AGENTS.md` is the brain's schema, not instructions for this 
 
 - Code: `brain.py` (files, git, FTS5 search) and `server.py` (MCP tools, auth, entrypoint).
 - Check: `uv run pytest -q`. For deployment changes, also `podman build .`.
-- Image: `.github/workflows/image.yml` publishes `ghcr.io/jhoogstraat/second-brain` on every push to `main`.
-- Target: a rootless Podman pod on a Raspberry Pi (arm64), using the Quadlet units in `deploy/`.
+- Image: `.github/workflows/image.yml` publishes `ghcr.io/jhoogstraat/second-brain` (amd64 + arm64) on every push to `main`.
+- `deploy/` is one example deployment: a rootless Podman pod via Quadlet units.
   `UserNS=` can't be set on a container that joins a pod.
 - FastMCP is 4.x. Check behaviour against its source in `.venv/` before relying on it.
 

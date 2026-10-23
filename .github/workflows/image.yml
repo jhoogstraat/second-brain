@@ -42,12 +42,11 @@ jobs:
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha
-      # The Pi is the only target; the homelab pins sha-<commit>@<digest>.
       - uses: docker/build-push-action@v7
         with:
           context: .
           file: Containerfile
-          platforms: linux/arm64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}

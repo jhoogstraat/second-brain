@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pull the image and (re)start the pod as rootless systemd services. Run on the Pi from the repo root.
+# Pull the image and (re)start the pod as rootless systemd services. Run on the host from the repo root.
 set -eu
 
 CONF="$HOME/.config/second-brain"

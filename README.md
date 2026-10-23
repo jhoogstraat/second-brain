@@ -3,15 +3,15 @@
 # second_brain
 
 The infrastructure for a personal **second brain** in the style of Andrej Karpathy's
-[LLM wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f). It runs
-on a Raspberry Pi, and any MCP harness can reach it over the internet: Claude, ChatGPT,
-Codex, Claude Code, and others.
+[LLM wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f). It is
+one HTTP server, so run it wherever you like. Once it has a public HTTPS URL, any MCP
+harness can reach it: Claude, ChatGPT, Codex, Claude Code, and others.
 
 This repo is only the system. The brain itself is a separate git repo of markdown
-files that lives in a Podman volume on the Pi.
+files in `BRAIN_DIR` (`/data/brain` in the image).
 
 ```
-Claude / ChatGPT / Codex ──HTTPS──▶ Cloudflare ──tunnel──▶ Pi: [ cloudflared │ second-brain MCP ] ──▶ volume: brain git repo
+Claude / ChatGPT / Codex ──HTTPS──▶ second-brain MCP (:8000) ──▶ BRAIN_DIR: brain git repo
 ```
 
 ## How it works
@@ -45,14 +45,26 @@ at that scale. If the wiki outgrows this, move to hybrid vector search (e.g.
 - FastMCP's GitHub OAuth proxy provides DCR, CIMD and PKCE.
 - It only accepts the GitHub logins (or numeric user IDs, which survive renames) listed in `GITHUB_ALLOWED_USERS`.
 - CLIs can use a static bearer token (`BRAIN_TOKEN`) instead.
-- Don't put Cloudflare Access in front of it. Remote clients like claude.ai can't complete its browser login.
+- Don't put a proxy that requires its own browser login (e.g. Cloudflare Access) in front of it; the clients' OAuth discovery can't get past it.
 
-## Deploy on the Pi
+## Run it
 
-You need a 64-bit Raspberry Pi OS (Trixie, which ships Podman 5), a domain on
-Cloudflare, and a GitHub account.
+The server needs:
+- **Config** from environment variables: see [`deploy/env.example`](deploy/env.example). `HOST` and `PORT` default to `0.0.0.0:8000`.
+- **Persistent storage** for `/data` (the brain repo and OAuth state), or set `BRAIN_DIR` and `FASTMCP_HOME` elsewhere.
+- **A public HTTPS URL** in front of port 8000, set as `PUBLIC_URL`.
 
-1. **Install Podman and git.** Clone this repo onto the Pi:
+The image `ghcr.io/jhoogstraat/second-brain` is published for amd64 and arm64, tagged
+`latest` and `sha-<commit>`. You can also run it without a container via
+`uv run second-brain`.
+
+### Example: Podman and Cloudflare Tunnel
+
+[`deploy/`](deploy) runs it as a rootless Podman pod with a Cloudflare tunnel, so the
+host needs no open ports. You need a Linux host with Podman 5 (e.g. Debian Trixie), a
+domain on Cloudflare, and a GitHub account.
+
+1. **Install Podman and git.** Clone this repo onto the host (Debian shown):
    ```sh
    sudo apt install -y podman git
    git clone https://github.com/jhoogstraat/second-brain.git && cd second-brain
@@ -64,7 +76,7 @@ Cloudflare, and a GitHub account.
 3. **Create the GitHub OAuth App** at github.com → Settings → Developer settings → OAuth Apps:
    - Homepage: `https://brain.example.com`
    - Callback: `https://brain.example.com/auth/callback`
-4. **Configure and start.** The script pulls the public image `ghcr.io/jhoogstraat/second-brain` (arm64, built by GitHub Actions on every push to `main`). Its first run creates two files in `~/.config/second-brain/`:
+4. **Configure and start.** The script pulls the image (built by GitHub Actions on every push to `main`). Its first run creates two files in `~/.config/second-brain/`:
    `env` for the app's secrets ([template](deploy/env.example)) and `tunnel.env` for the
    tunnel token alone, so the cloudflared image never sees the app's secrets. Fill both
    in, then run the script again:
@@ -99,8 +111,9 @@ same thing.
 ## Browse it in Obsidian (optional)
 
 Karpathy uses Obsidian as the IDE for reading the wiki. To get a copy, mirror the brain
-to a private GitHub repo. Use a fine-grained token that only has *Contents: read/write*
-on that repo.
+to a private git repo. On GitHub, use a fine-grained token that only has
+*Contents: read/write* on that repo. Add the remote to the brain repo, push once, then
+set `BRAIN_GIT_PUSH=1` and restart the server. With the Podman example:
 
 ```sh
 podman exec second-brain git -C /data/brain remote add origin https://x-access-token:<TOKEN>@github.com/you/brain-data.git
