@@ -6,7 +6,7 @@ from fastmcp import Client
 from fastmcp.exceptions import ToolError
 
 from second_brain.brain import Brain
-from second_brain.server import build_auth, build_server
+from second_brain.server import build_auth, build_server, load_secret_files
 
 
 def test_end_to_end(tmp_path):
@@ -72,3 +72,11 @@ def test_github_allowlist(monkeypatch):
     by_id = AllowlistGitHub({"42"}, client_id="x", client_secret="x",
                             base_url="https://brain.example.com", jwt_signing_key="k" * 32)
     assert asyncio.run(by_id.load_access_token("mallory")) is not None  # numeric ID matches
+
+
+def test_secret_files(tmp_path, monkeypatch):
+    (tmp_path / "token").write_text("s3cret\n")
+    monkeypatch.delenv("BRAIN_TOKEN", raising=False)
+    monkeypatch.setenv("BRAIN_TOKEN_FILE", str(tmp_path / "token"))
+    load_secret_files()
+    assert os.environ["BRAIN_TOKEN"] == "s3cret"

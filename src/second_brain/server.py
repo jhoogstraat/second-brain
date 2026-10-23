@@ -37,6 +37,16 @@ class AllowlistGitHub(GitHubProvider):
         return t if ids & self.allowed else None
 
 
+SECRETS = ("GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "JWT_SIGNING_KEY", "BRAIN_TOKEN")
+
+
+def load_secret_files() -> None:
+    """Read NAME from the file in NAME_FILE, so secrets can be mounted instead of passed as env."""
+    for name in SECRETS:
+        if path := os.environ.get(f"{name}_FILE"):
+            os.environ[name] = Path(path).read_text().strip()
+
+
 def build_auth() -> AuthProvider | None:
     env = os.environ
     verifiers = []
@@ -130,6 +140,7 @@ def build_server(brain: Brain, auth: AuthProvider | None = None) -> FastMCP:
 def main() -> None:
     brain = Brain(Path(os.environ.get("BRAIN_DIR", "/data/brain")))
     brain.init()
+    load_secret_files()
     mcp = build_server(brain, build_auth())
     hosts = ["localhost", "127.0.0.1"]
     if os.environ.get("PUBLIC_URL"):
