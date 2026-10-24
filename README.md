@@ -31,7 +31,8 @@ On first start the server seeds this layout from [`src/second_brain/template`](s
 
 **MCP surface:**
 - **Tools:** `read`, `list`, `search`, `write`, `delete`, `log`.
-- **Prompts:** `ingest`, `query`, `lint`.
+- **Resources:** `brain://AGENTS.md` (the schema), `brain://index.md`, and `brain://{path}` for any file. Clients that support it can attach them directly, e.g. `@` in Claude Code.
+- **Prompts:** `ingest`, `query`, `lint`. Each one embeds the current `AGENTS.md`, so the agent starts with the rules in hand.
 - **Instructions:** tell every client to read `AGENTS.md` before its first change in a conversation.
 
 Every change becomes a git commit, so any edit can be reverted.

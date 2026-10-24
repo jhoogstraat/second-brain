@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from fastmcp import FastMCP
-from fastmcp.exceptions import ToolError
+from fastmcp.exceptions import ResourceError, ToolError
 from fastmcp.server.auth import AuthProvider, MultiAuth
 from fastmcp.server.auth.providers.github import GitHubProvider
 from fastmcp.server.auth.providers.jwt import StaticTokenVerifier
@@ -17,8 +17,8 @@ from .brain import Brain, BrainError
 INSTRUCTIONS = """\
 This server is the user's second brain: a git-versioned LLM wiki of markdown files
 (raw/ immutable sources, wiki/ pages you maintain, index.md catalog, log.md history).
-Before your first change in a conversation, read AGENTS.md — it is the schema and
-defines the ingest, query and lint workflows. For questions, start from index.md
+Before your first change in a conversation, read AGENTS.md (also the resource
+brain://AGENTS.md) — it is the schema and defines the ingest, query and lint workflows. For questions, start from index.md
 and search, and cite the pages you used."""
 
 
@@ -115,20 +115,42 @@ def build_server(brain: Brain, auth: AuthProvider | None = None) -> FastMCP:
         details="pages touched: ...". Call once at the end of every ingest/query/lint."""
         return guard(brain.log, operation, title, details)
 
+    @mcp.resource("brain://AGENTS.md", name="schema", mime_type="text/markdown")
+    def schema() -> str:
+        """The brain's schema: layout, page conventions, ingest/query/lint workflows."""
+        return brain.read("AGENTS.md")
+
+    @mcp.resource("brain://index.md", name="index", mime_type="text/markdown")
+    def index() -> str:
+        """Catalog of every wiki page with a one-line summary."""
+        return brain.read("index.md")
+
+    @mcp.resource("brain://{path*}", name="file", mime_type="text/markdown")
+    def file(path: str) -> str:
+        """Any file in the brain, e.g. brain://wiki/concepts/x.md."""
+        try:
+            return brain.read(path)
+        except BrainError as e:
+            raise ResourceError(str(e)) from e
+
+    # Prompts embed the schema so the agent starts with the rules in hand.
+    def workflow(name: str, task: str) -> str:
+        return f"{brain.read('AGENTS.md')}\n\n---\n\nRun the {name} workflow above {task}"
+
     @mcp.prompt
     def ingest(source: str) -> str:
         """Ingest a new source (URL, pasted text, or file) into the brain."""
-        return f"Read AGENTS.md, then run the Ingest workflow for this source:\n\n{source}"
+        return workflow("Ingest", f"for this source:\n\n{source}")
 
     @mcp.prompt
     def query(question: str) -> str:
         """Answer a question from the brain, filing good answers back."""
-        return f"Read AGENTS.md, then run the Query workflow for:\n\n{question}"
+        return workflow("Query", f"for:\n\n{question}")
 
     @mcp.prompt
     def lint() -> str:
         """Health-check the wiki: contradictions, orphans, gaps, broken links."""
-        return "Read AGENTS.md, then run the Lint workflow over the whole wiki."
+        return workflow("Lint", "over the whole wiki.")
 
     @mcp.custom_route("/health", methods=["GET"])
     async def health(request: Request) -> PlainTextResponse:

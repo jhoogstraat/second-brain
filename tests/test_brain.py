@@ -37,7 +37,13 @@ def test_end_to_end(tmp_path):
                     await call("read", path=bad)
 
             await call("delete", path="wiki/concepts/spaced-repetition.md")
-            assert (await c.get_prompt("ingest", {"source": "x"})).messages
+            prompt = (await c.get_prompt("ingest", {"source": "x"})).messages[0].content.text
+            assert "# Second Brain — schema" in prompt and prompt.endswith("x")
+            assert {str(r.uri) for r in await c.list_resources()} == {"brain://AGENTS.md", "brain://index.md"}
+            assert "# Index" in (await c.read_resource("brain://index.md"))[0].text
+            assert "cramming" in (await c.read_resource("brain://raw/2026-01-01-anki.md"))[0].text
+            with pytest.raises(Exception, match="outside"):
+                await c.read_resource("brain://.git/config")
 
     asyncio.run(run())
     assert "] ingest | Anki essay" in brain.read("log.md")
