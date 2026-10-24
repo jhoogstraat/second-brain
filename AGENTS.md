@@ -1,8 +1,8 @@
 # AGENTS.md
 
 This repo is the **infrastructure** for an MCP-served second brain (see README). The
-brain's own data and schema are not here: `src/second_brain/template/` only seeds a
-new brain, and its `AGENTS.md` is the brain's schema, not instructions for this repo.
+brain's data lives in `BRAIN_DIR`, not here. The wiki method agents follow is the
+`INSTRUCTIONS` string in `server.py`; the bookkeeping that enforces it is in `brain.py`.
 
 - Code: `brain.py` (files, git, FTS5 search) and `server.py` (MCP tools, auth, entrypoint).
 - Check: `uv run pytest -q`. For deployment changes, also `podman build .`.

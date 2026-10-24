@@ -17,25 +17,36 @@ Claude / ChatGPT / Codex ──HTTPS──▶ second-brain MCP (:8000) ──▶
 ## How it works
 
 In Karpathy's method the LLM, not you, writes and maintains a wiki compiled from your
-sources. Knowledge then compounds instead of being re-derived on every RAG query. The
-brain has three layers:
+sources. Knowledge then compounds instead of being re-derived on every RAG query.
 
-| Path | What it is |
+The server keeps the agent's job down to judgment: what to write, what to link, what
+conflicts. It does all the bookkeeping itself:
+
+| Agent decides | Server does |
 |---|---|
-| `raw/` | Immutable source documents. The LLM can add new ones but never edits existing ones. |
-| `wiki/` | Pages the LLM writes: source summaries, entities, concepts, notes, `overview.md`. |
-| `AGENTS.md` | The schema. It holds the conventions and the **ingest / query / lint** workflows, and you and the LLM evolve it together. |
-| `index.md`, `log.md` | The catalog of every page, and the append-only history. |
+| A page's title, kind, one-line summary and body | Path (`wiki/<kind>/<slug>.md`), frontmatter, created/updated dates |
+| `[[Title]]` links | Normalises them to file names, reports links to missing pages, adds backlinks when a page is read |
+| Which sources a page draws on | Validates them; sources in `raw/` are immutable |
+| — | Regenerates `index.md`, appends to `log.md`, makes a git commit for every change |
+| Fixing what `lint` reports | `lint` finds broken links, orphans, pages without sources, uncited sources |
 
-On first start the server seeds this layout from [`src/second_brain/template`](src/second_brain/template).
+The method itself sits in the server instructions every client receives on connect, so
+there is no schema file to read first. Rules specific to your brain (language, how to
+handle recipes, ...) go on a `Conventions` page, which the index shows at the top.
+
+On disk the brain is `raw/` (sources), `wiki/<kind>/` (pages), `index.md` and `log.md`.
+An Obsidian vault opens it as is.
 
 **MCP surface:**
-- **Tools:** `read`, `list`, `search`, `write`, `delete`, `log`.
-- **Resources:** `brain://AGENTS.md` (the schema), `brain://index.md`, and `brain://{path}` for any file. Clients that support it can attach them directly, e.g. `@` in Claude Code.
-- **Prompts:** `ingest`, `query`, `lint`. Each one embeds the current `AGENTS.md`, so the agent starts with the rules in hand.
-- **Instructions:** tell every client to read `AGENTS.md` before its first change in a conversation.
-
-Every change becomes a git commit, so any edit can be reverted.
+- **Tools:**
+  - `read`: a page by title, a source, `index` or `log`.
+  - `search`
+  - `save_source`
+  - `write_page`
+  - `delete_page`
+  - `lint`
+- **Resources:** `brain://index.md`, plus `brain://{path}` for any file.
+- **Prompts:** `ingest`, `query`, `lint`. Each one repeats the method, for clients that drop server instructions.
 
 **Search** is BM25 using SQLite FTS5. Karpathy found that an index file plus brief
 summaries is enough up to hundreds of pages, and that you don't need embedding-based RAG
@@ -108,6 +119,20 @@ first time they connect.
 Then just talk to it, for example *"Ingest this article: <url>"*, *"What do I know
 about X?"* or *"Lint the brain."* The MCP prompts `ingest`, `query` and `lint` do the
 same thing.
+
+## Start over
+
+`second-brain reset` moves the brain to a timestamped backup next to it (e.g.
+`/data/brain.20261024-101500.bak`) and seeds a fresh one. With the Podman example:
+
+```sh
+podman exec second-brain second-brain reset
+```
+
+Delete the backup folder from the volume once you're sure you don't need it.
+
+The fresh brain is a new git repo with no remote, so if you push to a mirror
+(`BRAIN_GIT_PUSH=1`), add the remote again as described below.
 
 ## Browse it in Obsidian (optional)
 
