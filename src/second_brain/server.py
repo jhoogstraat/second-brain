@@ -1,6 +1,7 @@
 """MCP server exposing the brain over Streamable HTTP at /mcp."""
 
 import os
+import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -15,11 +16,27 @@ from starlette.responses import PlainTextResponse
 from .brain import Brain, BrainError
 
 INSTRUCTIONS = """\
-This server is the user's second brain: a git-versioned LLM wiki of markdown files
-(raw/ immutable sources, wiki/ pages you maintain, index.md catalog, log.md history).
-Before your first change in a conversation, read AGENTS.md (also the resource
-brain://AGENTS.md) — it is the schema and defines the ingest, query and lint workflows. For questions, start from index.md
-and search, and cite the pages you used."""
+This is the user's second brain: a wiki that you, the LLM, write and maintain (after
+Karpathy's "LLM wiki"). Knowledge compounds: every source and every good answer should
+leave the wiki richer. You decide what to write; the server handles paths, frontmatter,
+links, the index, the log and git commits.
+
+- Questions: `search`, then `read` the pages it finds (`read("index")` lists every page).
+  Answer with [[page]] citations. If the answer is a reusable synthesis, save it with
+  `write_page(kind="note")`.
+- New material (article, notes, transcript, a file's text): `save_source` it verbatim, then
+  `write_page` a kind="source" summary citing it, then create or update every entity and
+  concept page it touches — usually several. `read` a page before updating it:
+  `write_page` replaces the whole body.
+- Pages: one topic per page, a one-line summary, and generous [[Title]] links to related
+  pages (missing targets are reported back — create them or drop the link). Kinds are free
+  folders: entity, concept, note, source, or domain kinds like recipe. List the raw
+  sources a page draws on in `sources`. When sources disagree, keep both claims and say
+  which is newer. Ask the user what to emphasise unless they said to go ahead.
+- Maintenance: `lint` reports broken links, orphans and uncited sources; fix them and look
+  for contradictions while you are there.
+- Rules the user sets for this brain go on the page "Conventions" (kind="meta"); the index
+  shows them at the top, so follow them."""
 
 
 class AllowlistGitHub(GitHubProvider):
@@ -83,74 +100,67 @@ def build_server(brain: Brain, auth: AuthProvider | None = None) -> FastMCP:
             raise ToolError(str(e)) from e
 
     @mcp.tool(annotations={"readOnlyHint": True})
-    def read(path: str) -> str:
-        """Read a file from the brain, e.g. "AGENTS.md", "index.md" or "wiki/concepts/x.md"."""
-        return guard(brain.read, path)
-
-    @mcp.tool(name="list", annotations={"readOnlyHint": True})
-    def list_files(directory: str = "") -> list[str]:
-        """List all files under a directory of the brain ("" = everything)."""
-        return guard(brain.files, directory)
+    def read(name: str) -> str:
+        """Read a page by title or name (e.g. "Spaced Repetition"), a source, "index"
+        (catalog of every page) or "log". Pages end with the pages linking to them."""
+        return guard(brain.read, name)
 
     @mcp.tool(annotations={"readOnlyHint": True})
     def search(query: str, limit: int = 10) -> list[dict]:
-        """Full-text (BM25) search across all markdown in the brain. Returns paths and snippets, best first."""
+        """Full-text search over pages and sources. Returns name, title, summary, snippet; best first."""
         return guard(brain.search, query, limit)
 
     @mcp.tool(annotations={"destructiveHint": False})
-    def write(path: str, content: str, message: str = "") -> str:
-        """Create or overwrite a markdown file (whole content) and commit it.
-        New sources go to raw/ (existing raw/ files are immutable); wiki pages to wiki/.
-        `message` is the git commit message."""
-        return guard(brain.write, path, content, message)
+    def save_source(title: str, content: str, url: str = "") -> dict:
+        """Store new material verbatim as an immutable source. Returns its name (cite it in
+        write_page's `sources`) and existing pages that look related."""
+        return guard(brain.save_source, title, content, url)
+
+    @mcp.tool(annotations={"destructiveHint": False})
+    def write_page(title: str, kind: str, summary: str, body: str, sources: list[str] | None = None) -> dict:
+        """Create or replace a wiki page. `kind`: entity, concept, note, source, overview, meta, or
+        any domain kind. `summary`: one line for the index. `body`: markdown with [[Title]] links,
+        no frontmatter. `sources`: names of sources the page draws on."""
+        return guard(brain.write_page, title, kind, summary, body, sources)
 
     @mcp.tool(annotations={"destructiveHint": True})
-    def delete(path: str, message: str = "") -> str:
-        """Delete a wiki file (not raw/) and commit. Recoverable from git history."""
-        return guard(brain.delete, path, message)
+    def delete_page(name: str) -> dict:
+        """Delete a wiki page (sources are immutable). Recoverable from git history."""
+        return guard(brain.delete_page, name)
 
-    @mcp.tool
-    def log(operation: str, title: str, details: str = "") -> str:
-        """Append an entry to log.md, e.g. operation="ingest", title="Article Title",
-        details="pages touched: ...". Call once at the end of every ingest/query/lint."""
-        return guard(brain.log, operation, title, details)
-
-    @mcp.resource("brain://AGENTS.md", name="schema", mime_type="text/markdown")
-    def schema() -> str:
-        """The brain's schema: layout, page conventions, ingest/query/lint workflows."""
-        return brain.read("AGENTS.md")
+    @mcp.tool(annotations={"readOnlyHint": True})
+    def lint() -> dict:
+        """Health check: broken links, orphan pages, pages without sources, uncited sources."""
+        return brain.lint()
 
     @mcp.resource("brain://index.md", name="index", mime_type="text/markdown")
     def index() -> str:
-        """Catalog of every wiki page with a one-line summary."""
-        return brain.read("index.md")
+        """Catalog of every page with its one-line summary."""
+        return brain.read("index")
 
     @mcp.resource("brain://{path*}", name="file", mime_type="text/markdown")
     def file(path: str) -> str:
-        """Any file in the brain, e.g. brain://wiki/concepts/x.md."""
+        """Any file in the brain, e.g. brain://wiki/concept/x.md."""
         try:
             return brain.read(path)
         except BrainError as e:
             raise ResourceError(str(e)) from e
 
-    # Prompts embed the schema so the agent starts with the rules in hand.
-    def workflow(name: str, task: str) -> str:
-        return f"{brain.read('AGENTS.md')}\n\n---\n\nRun the {name} workflow above {task}"
-
+    # Prompts repeat the method, for clients that drop server instructions.
     @mcp.prompt
     def ingest(source: str) -> str:
-        """Ingest a new source (URL, pasted text, or file) into the brain."""
-        return workflow("Ingest", f"for this source:\n\n{source}")
+        """Add new material to the brain."""
+        return f"{INSTRUCTIONS}\n\n---\n\nIngest this into the brain:\n\n{source}"
 
     @mcp.prompt
     def query(question: str) -> str:
-        """Answer a question from the brain, filing good answers back."""
-        return workflow("Query", f"for:\n\n{question}")
+        """Answer a question from the brain."""
+        return f"{INSTRUCTIONS}\n\n---\n\nAnswer from the brain: {question}"
 
-    @mcp.prompt
-    def lint() -> str:
-        """Health-check the wiki: contradictions, orphans, gaps, broken links."""
-        return workflow("Lint", "over the whole wiki.")
+    @mcp.prompt(name="lint")
+    def lint_brain() -> str:
+        """Health-check and tidy the wiki."""
+        return f"{INSTRUCTIONS}\n\n---\n\nRun `lint`, fix what it finds, and look for contradictions."
 
     @mcp.custom_route("/health", methods=["GET"])
     async def health(request: Request) -> PlainTextResponse:
@@ -161,6 +171,10 @@ def build_server(brain: Brain, auth: AuthProvider | None = None) -> FastMCP:
 
 def main() -> None:
     brain = Brain(Path(os.environ.get("BRAIN_DIR", "/data/brain")))
+    if sys.argv[1:] == ["reset"]:
+        backup = brain.reset()
+        print(f"Fresh brain at {brain.root}" + (f"; old one kept at {backup}" if backup else ""))
+        return
     brain.init()
     load_secret_files()
     mcp = build_server(brain, build_auth())
