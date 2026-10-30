@@ -1,6 +1,6 @@
 FROM docker.io/library/python:3.13-slim-trixie
 
-RUN apt-get update && apt-get install -y --no-install-recommends git \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=ghcr.io/astral-sh/uv:0.13 /uv /usr/local/bin/uv
 
